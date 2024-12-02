@@ -1,8 +1,8 @@
 import os
 import base64
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-
+from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext
+from telegram.ext.filters import Filters
 # Helper function to detect and decode Base64 strings
 def detect_and_decode_base64(file_content):
     decoded_parts = []
