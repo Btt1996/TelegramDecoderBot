@@ -1,5 +1,6 @@
 import os
 import base64
+import plistlib
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext
 from telegram.ext import filters
@@ -17,36 +18,51 @@ def detect_and_decode_base64(file_content):
                 pass  # Ignore non-Base64 parts
     return decoded_parts
 
+# Function to process .plist files
+def process_plist(file_content):
+    try:
+        # Parse the plist content (which is usually in XML format)
+        plist_data = plistlib.loads(file_content)
+        return plist_data
+    except Exception as e:
+        return f"Error processing plist: {str(e)}"
+
 # Start command handler
 async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text("Send me a file, and I'll extract and decode Base64 content for you!")
+    await update.message.reply_text("Send me a file, and I'll extract and decode Base64 content or process plist files for you!")
 
 # File handler
 async def handle_file(update: Update, context: CallbackContext):
-    file = await update.message.document.get_file()
+    file = update.message.document.get_file()
     file_path = f"{file.file_id}"
 
-    # Download the file
-    await file.download(file_path)
+    # Get the file extension
+    file_extension = os.path.splitext(file_path)[1].lower()
 
-    # Read file content
-    with open(file_path, 'r') as f:
-        content = f.read()
+    # Notify the user that the file type is being processed
+    await update.message.reply_text(f"The {file_extension[1:].upper()} file is being processed...")
 
-    # Detect and decode Base64
-    decoded_parts = detect_and_decode_base64(content)
-    
-    if decoded_parts:
-        for part in decoded_parts:
-            await update.message.reply_text(part)
+    # Download the file content as a bytearray
+    file_content = await file.download_as_bytearray()
+
+    # Handle different file types based on extension
+    if file_extension == ".plist":
+        # Process plist file
+        plist_data = process_plist(file_content)
+        await update.message.reply_text(f"Processed plist data: {plist_data}")
     else:
-        await update.message.reply_text("No Base64-encoded content found.")
+        # Decode the file content if it's not plist (e.g., Base64)
+        content = file_content.decode('utf-8', errors='ignore')
+        decoded_parts = detect_and_decode_base64(content)
 
-    # Cleanup
-    os.remove(file_path)
+        if decoded_parts:
+            for part in decoded_parts:
+                await update.message.reply_text(part)
+        else:
+            await update.message.reply_text("No Base64-encoded content found.")
 
 # Main function to start the bot
-def main():
+async def main():
     TOKEN = os.getenv('TELEGRAM_TOKEN')  # Use environment variable for security
     application = Application.builder().token(TOKEN).build()
 
@@ -55,7 +71,8 @@ def main():
     application.add_handler(MessageHandler(filters.Document.ALL, handle_file))
 
     # Start the bot
-    application.run_polling()
+    await application.run_polling()
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
